@@ -1,5 +1,4 @@
-# Django_test_task
-Test task
+# Django_employees
 
   При выполнении задания использовал:
 - Django 2.1
