@@ -1,0 +1,175 @@
+{% extends 'tree/base_tree.html' %}
+
+{% block content %}
+    <div class="row justify-content-md-center">
+        <h1><span id="empall">{{ employees|length }}</span> of {{ count_all }} records are shown </h1>
+    </div>
+    <div class="row mt-5">
+    {% for emp in employees %}  
+        <div id="{{ emp.id }}" class="draggable droppable col-7 offset-{{ emp.level }}">
+            <b>{{ emp.name }}:</b> {{ emp.position }} &nbsp;
+                {% ifequal emp.level 1 %} <a href="javascript:click({{ emp.id }});">+</a> {% endifequal %}
+        </div>
+
+    {% endfor %}
+    </div>
+{% endblock %}
+
+{% block script %}
+    <script>
+        
+        $(function() {
+            fixed_footer();
+        });
+        
+        drag();
+        drop();
+        
+        var emp_all = {{ employees|length }};       // Counting records from the beginning
+        
+        function drag(){
+            $(".draggable").draggable({
+                containment: "parent",
+                axis: "y",
+                revert: true
+           });
+        }
+        
+        function drop(){
+            $('.droppable').droppable({
+                drop: function(event, ui) {
+                    $(this).removeClass('pl-2');
+                    if ( countClasses( $(ui.draggable), $(this)) ){
+                        var id = $(ui.draggable).attr('id');
+                        var new_parent = $(this).attr('id');
+                        sendRequest(id, new_parent);
+                    }
+                    
+                },
+                over: function( event, ui ) {
+                    if ( countClasses( $(ui.draggable), $(this)) ){
+                        $(this).addClass('pl-2');
+                        $(ui.draggable).css('color', 'red');
+                    }                    
+                },
+                out: function( event, ui ) {
+                    if ( countClasses( $(ui.draggable), $(this)) ){
+                        $(this).removeClass('pl-2');
+                        $(ui.draggable).css('color', '');
+                    }
+                }
+            });
+        }
+        
+        // Sending request into the server, getting response and rendering elements
+        function sendRequest(id, new_parent){
+            var resp_='';
+            $.ajax({
+                url: "/ajaxdragdrop",
+                data: {'id': id, 'new_parent': new_parent },
+                success: function (resp) {
+                    
+                    var old_parent_id = resp.old_par_id;
+                    var rec_html = $('#'+id).clone();       // clone record to delete
+                    var old_parent_childrens = resp.childrens_count;
+                    
+                    $('#'+id).remove();                     // Deleting a draggable record
+                                                            // getting the text <a> of a new parent
+                    new_parent_a_text = $('#'+new_parent).children('a').text();
+                    
+                    if (new_parent_a_text == '-'){
+                        $(rec_html).insertAfter('#'+new_parent);
+                        $(rec_html).children('b').removeClass('p'+old_parent_id);
+                        $(rec_html).children('b').addClass('p'+new_parent);
+                        $(rec_html).css('top', '0');
+                        setTimeout(function() { $(rec_html).css('color', ''); }, 1000);
+                    }
+                    if (!new_parent_a_text){            // No text means that there is no <a>
+                        var a = '&nbsp; <a href="javascript:click('+ new_parent +');">+</a>'
+                        $('#'+new_parent).append(a);
+                    }
+                    if (old_parent_childrens - 0 == 1){ // if old parent has only one child
+                        $('#'+old_parent_id).children('a').remove();    // remove <a>
+                    }
+                    $(".p"+id).parent().remove();       // Deleting all childrens draggable
+                    drag();
+                    drop();
+                }
+            });
+            return resp_;
+        }
+        
+        // This define drag and drop behavior (over, out, drop)
+        function countClasses( drag, drop){
+            var dg_c = drag.children('b').attr('class');
+            var dp_c = drop.children('b').attr('class');
+            if ( dg_c && dp_c ){
+                if (drag.children('b').hasClass('p'+drop.attr('id'))) return false;
+                if (dg_c.split(' ').length - 1 == dp_c.split(' ').length) 
+                    return true;
+                else
+                    return false;
+            } else if (dg_c && drop.attr('id')-0 > 1 && drop.attr('id')-0 < 12){
+                if (drag.children('b').hasClass('p'+drop.attr('id'))) return false;
+                if (dg_c.split(' ').length == 1) return true;
+            } else { return false; }
+        }
+        
+        // When + or - clicked
+        function click(id) {
+            
+            var this_div = $('#'+id);               // Getting the <div> id, in which <a>
+            var this_a = this_div.children('a');    // Getting this <a>
+            var a_txt = this_a.text();              // Getting <a> text
+            
+            if (a_txt == "+") {
+                    $.ajax({
+                    url: "/ajaxtree",
+                    data: {id: id },
+                    success: function (resp) {
+                        getting_resp(resp.q)
+                        this_a.text("-");       // If the request is succesfull, change the link text 
+                        fixed_footer();
+                        drag();
+                        drop();
+                    }
+                });
+            }
+            else {
+                this_a.text("+");               // Change - by +
+                emp_all -= $(".p"+id).length    // counting employees for deletion
+                $('#empall').text(emp_all)      // Changing the employees count link
+                $(".p"+id).parent().remove()    // Delete the view of employeers that contain this class
+                fixed_footer();
+            }
+        
+            function getting_resp(resp) {       // global var: this_a, this_div
+                
+                var rows = "";
+                var emp_len = resp.length;
+
+                emp_all += emp_len              // Count all records
+
+                $('#empall').text(emp_all)
+                $('#emp_len').text(emp_len)
+
+                for (var i = 0; i < emp_len; i++){
+
+                    var a_tag = '&nbsp; <a href="javascript:click('+ resp[i].id +');">+</a>';
+                    var last_arr_id = this_a.siblings("b").attr("class");   // Getting a parent classes
+                    var arr_id = ' class="';
+
+                    if (last_arr_id) 
+                        arr_id += last_arr_id + ' p' + id +'"';
+                    else
+                        arr_id += 'p' + id + '"';
+                    if (resp[i].leaf) a_tag = '';
+                    rows += '<div id="' + resp[i].id + '" class="draggable droppable col-7 ui-widget-content offset-' + resp[i].lev + '">' +
+                                '<b' + arr_id + '>' + resp[i].nm + ':</b>' + resp[i].pos + a_tag + 
+                            '</div>'
+                }
+                $(rows).insertAfter(this_div);
+            }
+        }
+    </script>
+{% endblock %}
