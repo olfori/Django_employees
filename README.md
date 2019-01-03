@@ -10,8 +10,8 @@
 - Python 3.7
 
   Frontend:
- - Bootstrap v4.1
- - Jquery + Jquery UI
+- Bootstrap v4.1
+- Jquery + Jquery UI
 
 # Часть 1:
 
